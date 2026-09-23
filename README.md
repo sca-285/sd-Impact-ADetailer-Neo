@@ -39,7 +39,7 @@ Optional weights:
 
 Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOLOE model and the text encoder is not cached.
 
-## Factory defaults
+## Defaults (Check your own please)
 
 | Setting | Default |
 |---|---|
@@ -49,7 +49,7 @@ Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOL
 | Keep top k | 0 (all) |
 | Min box size | 10 px |
 | Mask blur | 12 |
-| Denoise | 0.5 |
+| Denoise | 0.4 |
 | Inpaint only masked | on |
 | Noise mask feather | 5 |
 | Masked padding | 32 px |
