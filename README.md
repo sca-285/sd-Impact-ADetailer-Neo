@@ -11,7 +11,7 @@ Not a drop-in replacement for [ADetailer](https://github.com/Bing-su/adetailer) 
 WebUI → Extensions → Install from URL → this repo → Apply and restart.
 
 ```bash
-git clone https://github.com/newofmylife285-hub/impact-adetailer.git extensions/impact-adetailer
+git clone https://github.com/sca-285/impact-adetailer.git extensions/impact-adetailer
 ```
 
 `install.py` installs `ultralytics` if it is missing.
