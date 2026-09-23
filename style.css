@@ -1,0 +1,41 @@
+/* Impact ADetailer - panel containment.
+ *
+ * The WebUI loads extensions/<ext>/style.css on Forge, ReForge and Neo alike
+ * (modules/ui_gradio_extensions.py -> scripts.list_files_with_name).
+ *
+ * Everything here is scoped to this extension's own accordion. Stock gradio
+ * 3.41 (ReForge) and 4.40 (Forge, Neo) both wrap a component's `info` text
+ * correctly on their own - checked against both, rendered in a browser. A
+ * custom theme or another extension's CSS can still knock it out of the
+ * column, usually with a white-space or a width: max-content rule that was
+ * never meant to reach this far. These rules put the panel back.
+ */
+
+#script_txt2img_impact_adetailer_panel,
+#script_img2img_impact_adetailer_panel,
+.iad-panel {
+    max-width: 100%;
+}
+
+/* Nothing inside the panel may be wider than what contains it. */
+.iad-panel * {
+    max-width: 100%;
+}
+
+/* gradio renders `info` as a bare <div> inside the component's <label>:
+ *   textbox/number   .block > label.container > div
+ *   slider           .block > .wrap > .head > label > div
+ * Identical on 3.41 and 4.40, so one selector covers every fork. */
+.iad-panel label > div {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* A flex item refuses to shrink below its own content until min-width says it
+ * may. This is what lets a slider's label push its row past the column edge. */
+.iad-panel label,
+.iad-panel .head,
+.iad-panel .wrap,
+.iad-panel div.form {
+    min-width: 0;
+}

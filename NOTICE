@@ -1,0 +1,12 @@
+Impact ADetailer
+================
+
+This extension is an independent project for Forge, ReForge and Forge Neo.
+
+It reuses ideas and UI patterns from:
+
+* [ADetailer](https://github.com/Bing-su/adetailer) (AGPL-3.0)
+* [ADetailer-Neo](https://github.com/Haoming02/sd-forge-adetailer) (AGPL-3.0)
+* [ComfyUI Impact Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) FaceDetailer crop loop
+
+Detection weights are not shipped. Ultralytics / Bingsu models keep their own licenses.

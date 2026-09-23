@@ -1,94 +1,110 @@
-# ADetailer Neo
-The good ol' [ADetailer](https://github.com/Bing-su/adetailer) extension, which performs automatic masking and inpainting, completely rewritten for [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo), now ***lighter, faster, and prettier*** :tm:
+# Impact ADetailer
 
-- **Download ZIP:** `68 KB` &rarr; `38 KB`
+After-detailer for **Forge**, **ReForge** and **Forge Neo**.
 
-> [!Caution]
-> If you have installed **any** other version of `ADetailer` before, please review the **Settings** and **UI Defaults** related to `Adetailer`, as some older values are incompatible<br>
-> *(or just delete `config.json` and `ui-config.json` to reset **everything**)*
+Detects regions with YOLO, crops them the way Impact Pack FaceDetailer does (`crop_factor` → `guide_size` → sample → paste), then writes the result back onto the image.
 
-## Features
-After a generation, use **YOLO** or **MediaPipe** model(s) to detect certain regions *(**e.g.** face)* to perform **Inpainting**, improving fine details automatically
+Not a drop-in replacement for [ADetailer](https://github.com/Bing-su/adetailer) or [ADetailer-Neo](https://github.com/Haoming02/sd-forge-adetailer). Those squash each region to a fixed width/height. This one keeps the crop aspect ratio.
 
-> [!Note]
-> Not taking feature requests ; this repo is only meant as the "official" fork that is guaranteed to work with **Forge Neo** ; if you need other features, consider [this fork](https://github.com/abzaloff/aadetailer-neoforge) instead
+## Install
 
-## Models
-On a fresh launch, this Extension will download the following **10** detector models into the `models/adetailer/` folder
+WebUI → Extensions → Install from URL → this repo → Apply and restart.
 
-<table>
-	<tr>
-		<th>Filename</th>
-		<th>Source</th>
-	</tr>
-	<tr>
-		<td>face_yolov8n.pt</td>
-		<td rowspan="6">
-			<a href="https://huggingface.co/Bingsu/adetailer">Bingsu/adetailer</a>
-		</td>
-	</tr>
-	<tr>
-		<td>face_yolov8s.pt</td>
-	</tr>
-	<tr>
-		<td>hand_yolov8n.pt</td>
-	</tr>
-	<tr>
-		<td>hand_yolov8s.pt</td>
-	</tr>
-	<tr>
-		<td>person_yolov8n-seg.pt</td>
-	</tr>
-	<tr>
-		<td>person_yolov8s-seg.pt</td>
-	</tr>
-	<tr>
-		<td>yolov8x-worldv2.pt</td>
-		<td>
-			<a href="https://github.com/ultralytics/assets">ultralytics/assets</a>
-		</td>
-	</tr>
-	<tr>
-		<td>mediapipe_face_short.tflite</td>
-		<td rowspan="2">
-			<a href="https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector">mediapipe/face_detector</a>
-		</td>
-	</tr>
-	<tr>
-		<td>mediapipe_face_full.tflite</td>
-	</tr>
-	<tr>
-		<td>face_landmarker.task</td>
-		<td>
-			<a href="https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker">mediapipe/face_landmarker</a>
-		</td>
-	</tr>
-</table>
+```bash
+git clone https://github.com/newofmylife285-hub/impact-adetailer.git extensions/impact-adetailer
+```
 
-> [!Tip]
-> You can put additional [Ultralytics](https://github.com/ultralytics/ultralytics) YOLO models into the `models/adetailer/` folder
+`install.py` installs `ultralytics` if it is missing.
 
-> [!Important]
-> The **YOLO** models must be in `.pt` format
+Forge Neo may print that an `adetailer` folder looks outdated. That is a name match, not a version check. Rename the folder to `impact-adetailer-neo` to hide it.
 
-<br>
-<hr>
-<br>
+Disable any other ADetailer copy. Two panels will fight.
 
-<pre align="center">
-Copyright (C) 2026 Bing-su
-Copyright (C) 2026 Haoming02
+## Detectors
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+Put weights in `models/adetailer` or `models/ultralytics`. Extra folders: Settings → Impact ADetailer → Extra paths.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
+| Kind | Example | Classes box |
+|---|---|---|
+| Closed-set YOLO | `face_yolov8n.pt` | filters the model's own names |
+| YOLO-seg | `person_yolov8m-seg.pt` | same, plus a silhouette mask |
+| YOLO-World / YOLOE | filename must contain `-world` or `yoloe` | open vocabulary |
 
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see https://www.gnu.org/licenses/.
-</pre>
+Optional weights:
+
+* SAM / SAM2 → `models/sam`
+* OpenCLIP → `models/clip`
+
+Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOLOE model and the text encoder is not cached.
+
+## Factory defaults
+
+| Setting | Default |
+|---|---|
+| Classes | `face, hand, -ear` |
+| Confidence | 0.5 |
+| Top-k sort | Confidence |
+| Keep top k | 0 (all) |
+| Min box size | 10 px |
+| Mask blur | 12 |
+| Denoise | 0.5 |
+| Inpaint only masked | on |
+| Noise mask feather | 5 |
+| Masked padding | 32 px |
+| Steps / CFG | 20 / 4 |
+| Sampler | DPM++ 2M + Karras |
+| crop_factor | 3 |
+| guide_size | 768 |
+| max_size | 1536 |
+| guide_size_for | bbox |
+| force_inpaint | on |
+| cycle | 3 |
+
+**Reset tabs** restores these. `impact-adetailer-ui.json` overrides them until you reset.
+
+## Prompt tokens
+
+Empty prompt = main prompt.
+
+```
+face prompt [SEP] second face
+[CLASS:face] a face [CLASS:hand] a hand
+[SKIP]
+[PROMPT]
+```
+
+## Impact loop
+
+Same order as FaceDetailer:
+
+1. Crop around the box × `crop_factor`.
+2. Scale so the short side of the **bbox** (or the crop, if the checkbox is off) reaches `guide_size`.
+3. Clamp the long side to `max_size`.
+4. If scale would be ≤ 1 and `force_inpaint` is off, skip the region.
+5. Sample `cycle` times. Each cycle goes through the VAE (Comfy stays in latent).
+
+Set **Masked padding** to 0 to match FaceDetailer `crop_factor` exactly.
+
+## ControlNet / checkpoint / VAE
+
+* **Passthrough** reuses the main generation's ControlNet units.
+* A named model builds one unit on the crop only.
+* Needs the Forge-family builtin (`lib_controlnet`). Plain A1111 + sd-webui-controlnet is not wired.
+* **Use different checkpoint / VAE** loads once per tab and restores afterwards. ControlNet is skipped if the new checkpoint is a different family (SDXL ↔ SD1 / Flux / Anima).
+
+## Settings
+
+| Option | Default |
+|---|---|
+| Max tabs | 4 (needs Reload UI) |
+| Sort boxes | Area, large to small |
+| Same seed every tab | off |
+| Keep YOLO offline | on |
+| Detector device | Automatic |
+| Unload detectors after each run | off |
+| Max process-image sheets | 16 |
+| Remember tab values | on |
+
+## License
+
+AGPL-3.0. See `LICENSE` and `NOTICE`.
