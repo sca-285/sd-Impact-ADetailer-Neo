@@ -8,6 +8,15 @@ Detects regions with YOLO, crops them the way Impact Pack FaceDetailer does (`cr
 
 Not a drop-in replacement for [ADetailer](https://github.com/Bing-su/adetailer) or [ADetailer-Neo](https://github.com/Haoming02/sd-forge-adetailer). Those squash each region to a fixed width/height. This one keeps the crop aspect ratio.
 
+## Visual Comparer
+
+This extension provides an additional "ADetailer Comparer" panel located directly below the main image display area of the WebUI.   
+
+- This panel displays the image with a vertical split-screen slider.   
+- You can drag this slider left or right to directly compare the differences in details, lighting, and sharpness between the original image and the processed result 
+
+[Comparer](https://iili.io/nAHLfCG.png)
+
 ## Install
 
 WebUI → Extensions → Install from URL → this repo → Apply and restart.
