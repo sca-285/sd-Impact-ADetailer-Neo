@@ -101,11 +101,7 @@ Set **Masked padding** to 0 to match FaceDetailer `crop_factor` exactly.
 | Max tabs | 8 (needs Reload UI) |
 | Sort boxes | Area, large to small |
 | Same seed every tab | off |
-| Keep YOLO offline | on |
 | Detector device | Automatic |
-| Unload detectors after each run | off |
-| Max process-image sheets | 16 |
-| Remember tab values | on |
 
 ## License
 
