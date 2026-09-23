@@ -69,7 +69,7 @@ Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOL
 | max_size | 1024-1536 |
 | guide_size_for | bbox |
 | force_inpaint | on |
-| cycle | 1 |
+| cycle | 1-3 |
 
 **Reset tabs** restores these. `impact-adetailer-ui.json` overrides them until you reset.
 
