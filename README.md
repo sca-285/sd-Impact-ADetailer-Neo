@@ -2,7 +2,7 @@
 
 After-detailer for **Forge**, **ReForge** and **Forge Neo**.
 
-*This extension is inspired on the method how FaceDetailer operate in ComfyUI.*
+*This extension is inspired on the method how FaceDetailer - Impact-Pack operate in ComfyUI.*
 
 Detects regions with YOLO, crops them the way Impact Pack FaceDetailer does (`crop_factor` → `guide_size` → sample → paste), then writes the result back onto the image.
 
