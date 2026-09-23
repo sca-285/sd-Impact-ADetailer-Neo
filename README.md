@@ -52,7 +52,7 @@ Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOL
 
 | Setting | Default |
 |---|---|
-| Classes | `face, hand, -ear` |
+| Classes | `face` |
 | Confidence | 0.5 |
 | Top-k sort | Confidence |
 | Keep top k | 0 (all) |
