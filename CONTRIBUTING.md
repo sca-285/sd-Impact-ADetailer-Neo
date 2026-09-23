@@ -2,7 +2,7 @@
 
 ## Setup
 
-1. Clone into `extensions/impact-adetailer` of a Forge, ReForge or Forge Neo install.
+1. Clone into `extensions/sd-Impact-ADetailer-Neo` of a Forge, ReForge or Forge Neo install.
 2. Restart the WebUI so `install.py` can pull `ultralytics` if needed.
 3. Do not commit `__pycache__` or `impact-adetailer-ui.json`.
 
@@ -14,7 +14,7 @@
 * Inner img2img jobs use an empty script runner plus `is_iadetailer_job`. Do not attach other alwayson scripts there except ControlNet.
 * Conditioning cache on the inner job must be `[None, None]`, never `None` or `[]`.
 
-## Tests you can run by hand
+## Tests you can run.
 
 * txt2img + one face detector, preview = Detection
 * same with **Use different checkpoint** on, confirm the main model is restored
