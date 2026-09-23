@@ -1,6 +1,8 @@
-# Impact ADetailer
+# Impact ADetailer Neo
 
 After-detailer for **Forge**, **ReForge** and **Forge Neo**.
+
+*This extension is inspired on the method how FaceDetailer operate in ComfyUI.*
 
 Detects regions with YOLO, crops them the way Impact Pack FaceDetailer does (`crop_factor` → `guide_size` → sample → paste), then writes the result back onto the image.
 
@@ -54,8 +56,8 @@ Nothing is downloaded at runtime unless you type classes into a YOLO-World / YOL
 | Steps / CFG | 20 / 4 |
 | Sampler | DPM++ 2M + Karras |
 | crop_factor | 3 |
-| guide_size | 768 |
-| max_size | 1536 |
+| guide_size | 512-768 |
+| max_size | 1024-1536 |
 | guide_size_for | bbox |
 | force_inpaint | on |
 | cycle | 1 |
@@ -96,7 +98,7 @@ Set **Masked padding** to 0 to match FaceDetailer `crop_factor` exactly.
 
 | Option | Default |
 |---|---|
-| Max tabs | 4 (needs Reload UI) |
+| Max tabs | 8 (needs Reload UI) |
 | Sort boxes | Area, large to small |
 | Same seed every tab | off |
 | Keep YOLO offline | on |
