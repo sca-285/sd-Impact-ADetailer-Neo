@@ -15,7 +15,7 @@ This extension provides an additional "ADetailer Comparer" panel located directl
 - This panel displays the image with a vertical split-screen slider.   
 - You can drag this slider left or right to directly compare the differences in details, lighting, and sharpness between the original image and the processed result 
 
-[Comparer](https://iili.io/nAHLfCG.png)
+![Comparer Interface](https://iili.io/nAHLfCG.png)
 
 ## Install
 
