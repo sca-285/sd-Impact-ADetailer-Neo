@@ -408,6 +408,192 @@ def _unit_ui(n: int, models: list[str], prefix: str, saved: dict | None = None) 
     return widgets, model
 
 
+# ---------------------------------------------------------------- all tabs at once
+#
+# One panel above the tabs with the inpaint settings. Changing one of them there
+# writes it into every tab (or every enabled tab) at once. The tabs stay the
+# only source of truth: nothing here is passed to the script, so a generation,
+# its infotext, the API and the remembered tab state are exactly what the tabs
+# show.
+
+MASTER_SCOPES = ["All tabs", "Enabled tabs only"]
+# Gradio 4 names it, Gradio 3 (ReForge) takes a bool
+NO_PROGRESS = "hidden" if int(gr.__version__.split(".")[0]) >= 4 else False
+
+# field -> the "Use separate ..." box that must be ticked for the value to count
+MASTER_LINKS = {
+    "steps": "use_separate_steps",
+    "cfg": "use_separate_cfg",
+    "sampler": "use_separate_sampler",
+    "scheduler": "use_separate_sampler",
+    "checkpoint": "use_separate_checkpoint",
+    "vae": "use_separate_vae",
+    "inpaint_w": "use_wh",
+    "inpaint_h": "use_wh",
+}
+# choices that mean "same as the main generation": they do not tick the box
+MASTER_SAME = {"Use same sampler", "Use same scheduler", SAME_CHECKPOINT, SAME_VAE}
+
+
+def _master_ui(prefix: str, first: dict) -> dict:
+    """The controls of the panel, by UnitArgs field name. They start from the
+    1st tab's remembered values."""
+    D = UnitArgs()
+
+    def val(field, default=None, choices=None):
+        if default is None:
+            default = getattr(D, field)
+        return uistate.pick(first, field, default, choices)
+
+    def eid(name: str) -> str:
+        return f"{prefix}_all_{name}"
+
+    samplers, schedulers = _samplers(), _schedulers()
+    checkpoints, vaes = _checkpoints(), _vaes()
+    default_sampler = "DPM++ 2M" if "DPM++ 2M" in samplers else samplers[0]
+    default_sched = "Karras" if "Karras" in schedulers else schedulers[0]
+    w = {}
+
+    gr.Markdown(
+        "Changes here go straight into the tabs. Setting steps, CFG, sampler, checkpoint, VAE or size "
+        "also ticks the tabs' matching *Use separate* box.",
+        elem_classes="iad-all-hint",
+    )
+    w["scope"] = gr.Radio(MASTER_SCOPES, value=MASTER_SCOPES[0], label="Apply to", elem_id=eid("scope"))
+    with gr.Row():
+        w["use_separate_checkpoint"] = gr.Checkbox(value=val("use_separate_checkpoint", False),
+                                                   label="Different checkpoint (all)",
+                                                   elem_id=eid("use_separate_checkpoint"))
+        w["use_separate_vae"] = gr.Checkbox(value=val("use_separate_vae", False), label="Different VAE (all)",
+                                            elem_id=eid("use_separate_vae"))
+    with gr.Row():
+        w["checkpoint"] = _dropdown(checkpoints, val("checkpoint", SAME_CHECKPOINT, checkpoints),
+                                    "Checkpoint (all)", elem_id=eid("checkpoint"))
+        w["vae"] = _dropdown(vaes, val("vae", SAME_VAE, vaes), "VAE (all)", elem_id=eid("vae"))
+    with gr.Row():
+        w["use_separate_steps"] = gr.Checkbox(value=val("use_separate_steps"), label="Separate steps (all)",
+                                              elem_id=eid("use_separate_steps"))
+        w["use_separate_cfg"] = gr.Checkbox(value=val("use_separate_cfg"), label="Separate CFG (all)",
+                                            elem_id=eid("use_separate_cfg"))
+    with gr.Row():
+        w["steps"] = gr.Slider(1, 80, value=val("steps"), step=1, label="Steps (all)", elem_id=eid("steps"))
+        w["cfg"] = gr.Slider(1.0, 15.0, value=val("cfg"), step=0.1, label="CFG (all)", elem_id=eid("cfg"))
+    w["use_separate_sampler"] = gr.Checkbox(value=val("use_separate_sampler"), label="Separate sampler (all)",
+                                            elem_id=eid("use_separate_sampler"))
+    with gr.Row():
+        w["sampler"] = gr.Dropdown(choices=samplers, value=val("sampler", default_sampler, samplers),
+                                   label="Sampler (all)", elem_id=eid("sampler"))
+        w["scheduler"] = gr.Dropdown(choices=schedulers, value=val("scheduler", default_sched, schedulers),
+                                     label="Scheduler (all)", elem_id=eid("scheduler"))
+    with gr.Row():
+        w["denoise"] = gr.Slider(0.0, 1.0, value=val("denoise"), step=0.01, label="Denoise (all)",
+                                 elem_id=eid("denoise"))
+        w["feather"] = gr.Slider(0, 64, value=val("feather"), step=1, label="Mask blur (all)",
+                                 elem_id=eid("feather"))
+    with gr.Row():
+        w["noise_mask"] = gr.Checkbox(value=val("noise_mask"), label="Only masked (all)",
+                                      elem_id=eid("noise_mask"))
+        w["use_wh"] = gr.Checkbox(value=val("use_wh"), label="Separate W/H (all)",
+                                  elem_id=eid("use_wh"))
+    with gr.Row():
+        w["noise_mask_feather"] = gr.Slider(0, 64, value=val("noise_mask_feather"), step=1,
+                                            label="Noise feather (all)", elem_id=eid("noise_mask_feather"))
+        w["padding"] = gr.Slider(0, 256, value=val("padding"), step=4, label="Padding px (all)",
+                                 elem_id=eid("padding"))
+    with gr.Row():
+        w["inpaint_w"] = gr.Slider(64, 2048, value=val("inpaint_w"), step=8, label="Width (all)",
+                                   elem_id=eid("inpaint_w"))
+        w["inpaint_h"] = gr.Slider(64, 2048, value=val("inpaint_h"), step=8, label="Height (all)",
+                                   elem_id=eid("inpaint_h"))
+    with gr.Row():
+        w["crop_factor"] = gr.Slider(1.0, 6.0, value=val("crop_factor"), step=0.1, label="crop_factor (all)",
+                                     elem_id=eid("crop_factor"))
+        w["guide_size"] = gr.Slider(128, 2048, value=val("guide_size"), step=8, label="guide_size (all)",
+                                    elem_id=eid("guide_size"))
+        w["max_size"] = gr.Slider(256, 2048, value=val("max_size"), step=8, label="max_size (all)",
+                                  elem_id=eid("max_size"))
+    with gr.Row():
+        w["guide_size_for_bbox"] = gr.Checkbox(value=val("guide_size_for_bbox"), label="guide for bbox (all)",
+                                               elem_id=eid("guide_size_for_bbox"))
+        w["force_inpaint"] = gr.Checkbox(value=val("force_inpaint"), label="force_inpaint (all)",
+                                         elem_id=eid("force_inpaint"))
+    w["cycle"] = gr.Slider(1, 10, value=val("cycle"), step=1, label="cycle (all)", elem_id=eid("cycle"))
+    w["apply"] = gr.Button("Write all of these into the tabs", elem_id=eid("apply"))
+    for name, widget in w.items():
+        if name not in ("apply",):
+            try:
+                widget.do_not_save_to_config = True  # a remote control, not a setting of its own
+            except Exception:
+                pass
+    return w
+
+
+def _bind_master(w: dict, tabs: list[dict]) -> None:
+    """Wire the panel to the tabs. tabs: one {field: widget} per tab."""
+    fields = [name for name in w if name not in ("scope", "apply")]
+    enabled = [t["enabled"] for t in tabs]
+
+    def targets(scope, flags):
+        return [scope != MASTER_SCOPES[1] or bool(on) for on in flags]
+
+    def set_one(field):
+        link = MASTER_LINKS.get(field)
+
+        def fn(scope, value, *flags):
+            aim = targets(scope, flags)
+            if field in ("checkpoint", "vae"):
+                # the tab dropdown is greyed out until its box is ticked
+                out = [gr.update(value=value, interactive=value not in MASTER_SAME) if a else gr.update() for a in aim]
+            else:
+                out = [gr.update(value=value) if a else gr.update() for a in aim]
+            if link:
+                tick = value not in MASTER_SAME
+                # the panel's own box follows too, so it reads the same as the tabs
+                out.append(gr.update(value=tick))
+                out += [gr.update(value=tick) if a else gr.update() for a in aim]
+            return out
+
+        outputs = [t[field] for t in tabs]
+        if link:
+            outputs += [w[link]] + [t[link] for t in tabs]
+        return fn, outputs
+
+    for field in fields:
+        fn, outputs = set_one(field)
+        widget = w[field]
+        inputs = [w["scope"], widget] + enabled
+        # user edits only: the panel's own boxes are also set from code (see above)
+        event = getattr(widget, "release", None) if isinstance(widget, gr.Slider) else None
+        try:
+            if event is not None:
+                widget.release(fn, inputs=inputs, outputs=outputs, show_progress=NO_PROGRESS)
+                # typing into the slider's number box does not "release"
+                widget.input(fn, inputs=inputs, outputs=outputs, show_progress=NO_PROGRESS)
+            elif hasattr(widget, "input"):
+                widget.input(fn, inputs=inputs, outputs=outputs, show_progress=NO_PROGRESS)
+            else:
+                widget.change(fn, inputs=inputs, outputs=outputs, show_progress=NO_PROGRESS)
+        except Exception as exc:
+            print(f"[Impact ADetailer] all-tabs control for {field} not wired: {exc}")
+
+    def apply_all(scope, *values_and_flags):
+        values, flags = values_and_flags[: len(fields)], values_and_flags[len(fields):]
+        aim = targets(scope, flags)
+        out = []
+        for field, value in zip(fields, values):
+            if field in ("checkpoint", "vae"):
+                out += [gr.update(value=value, interactive=value not in MASTER_SAME) if a else gr.update() for a in aim]
+            else:
+                out += [gr.update(value=value) if a else gr.update() for a in aim]
+        return out
+
+    try:
+        w["apply"].click(apply_all, inputs=[w["scope"]] + [w[f] for f in fields] + enabled,
+                         outputs=[t[f] for f in fields for t in tabs], show_progress=NO_PROGRESS)
+    except Exception as exc:
+        print(f"[Impact ADetailer] all-tabs button not wired: {exc}")
+
+
 def tab_name(is_img2img: bool) -> str:
     return "img2img" if is_img2img else "txt2img"
 
@@ -452,12 +638,17 @@ def build_ui(is_img2img: bool = False) -> list:
             )
         widgets = [enable, save_before, preview]
         dropdowns = []
+        with gr.Accordion("🎛️ All tabs at once (inpainting)", open=False, elem_id=f"{prefix}_all"):
+            master = _master_ui(prefix, saved_units[0] if saved_units else {})
+        tab_fields = []
         with gr.Tabs():
             for n in range(max_tabs()):
                 unit_saved = saved_units[n] if n < len(saved_units) else {}
                 unit_widgets, model_dropdown = _unit_ui(n, models, prefix, unit_saved)
                 widgets.extend(unit_widgets)
                 dropdowns.append(model_dropdown)
+                tab_fields.append(dict(zip([name for name, _ in FIELD_KEYS], unit_widgets)))
+        _bind_master(master, tab_fields)
 
         def _rescan():
             found = list_detector_models()
