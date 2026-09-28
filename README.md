@@ -103,6 +103,24 @@ Set **Masked padding** to 0 to match FaceDetailer `crop_factor` exactly.
 * Needs the Forge-family builtin (`lib_controlnet`). Plain A1111 + sd-webui-controlnet is not wired.
 * **Use different checkpoint / VAE** loads once per tab and restores afterwards. ControlNet is skipped if the new checkpoint is a different family (SDXL ↔ SD1 / Flux / Anima).
 
+## All tabs at once
+
+**🎛️ All tabs at once (inpainting)**, above the tabs, changes the inpaint
+settings of every tab in one go: checkpoint, VAE, steps, CFG, sampler,
+scheduler, denoise, mask blur, only masked, noise feather, padding, width and
+height, crop_factor, guide_size, max_size, guide for bbox, force_inpaint and
+cycle.
+
+* A change there is written straight into the tabs, so each tab shows what will
+  run. Tabs can still be changed one by one afterwards.
+* **Apply to**: **All tabs**, or **Enabled tabs only**.
+* Setting steps, CFG, sampler, scheduler, checkpoint, VAE, width or height also
+  ticks the tabs' matching *Use separate ...* box (a "Use same ..." choice
+  unticks it).
+* **Write all of these into the tabs** copies the whole panel at once.
+* The panel starts from the 1st tab's values. It is only a remote control:
+  nothing in it is saved or written to the image's parameters by itself.
+
 ## Settings
 
 | Option | Default |
