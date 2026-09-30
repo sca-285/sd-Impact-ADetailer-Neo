@@ -117,7 +117,14 @@ cycle.
 * Setting steps, CFG, sampler, scheduler, checkpoint, VAE, width or height also
   ticks the tabs' matching *Use separate ...* box (a "Use same ..." choice
   unticks it).
-* **Write all of these into the tabs** copies the whole panel at once.
+* **Write checkpoint, VAE, steps, CFG and sampler into the tabs** copies those at once.
+  Denoise, mask blur, noise feather, padding, crop_factor, guide_size and max_size are
+  never copied by it: they depend on the size of the area, and a face's values erase
+  the eyes. Move them one by one, with **Enabled tabs only** when the eye or hand tabs
+  should keep their own.
+* Mask blur and noise feather are kept under a quarter of the detected area's short
+  side at run time (the console says when): a 12 px blur on an eye mask a few pixels
+  thick used to paste the redrawn eyes back at half strength, as a smear.
 * The panel starts from the 1st tab's values. It is only a remote control:
   nothing in it is saved or written to the image's parameters by itself.
 
