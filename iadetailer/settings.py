@@ -86,6 +86,15 @@ def remember_ui() -> bool:
     return bool(get_opt("iad_remember_ui", True))
 
 
+def max_crop_aspect() -> float:
+    """Longest crop side over its shortest; 0 turns the widening off (Impact Pack's crop)."""
+    try:
+        v = float(get_opt("iad_max_crop_aspect", 1.5) or 0)
+    except (TypeError, ValueError):
+        v = 1.5
+    return 0.0 if v < 1 else v
+
+
 def show_comparer() -> bool:
     return bool(get_opt("iad_show_comparer", True))
 
@@ -229,6 +238,18 @@ def register_settings() -> None:
             "Remember the tab settings you last pressed Generate with, and restore "
             "them next time (the WebUI's own ui-config cannot do this: it keys on "
             "labels, which every tab shares)",
+            section=section,
+        ),
+    )
+    add(
+        "iad_max_crop_aspect",
+        OptionInfo(
+            1.5,
+            "Widen thin crops to at most this shape (long side : short side; 0 = off). A box "
+            "around both eyes is about 4:1: sampled as a 1024x256 strip, the model loses the eyes. "
+            "At 1.5 it also sees the brows and the nose, as it does for a face",
+            gr.Slider,
+            {"minimum": 0, "maximum": 4, "step": 0.1},
             section=section,
         ),
     )

@@ -13,6 +13,7 @@ from .geom import (
     crop_image,
     dilate_mask,
     gaussian_feather,
+    widen_to_aspect,
     make_crop_region,
     paste_pixel,
     resize_lanczos,
@@ -343,6 +344,12 @@ def enhance_one(
 
     crop_factor = _crop_factor(unit, bbox)
     crop_region = make_crop_region((w, h), det.bbox, crop_factor)
+    # A thin crop (a box around both eyes is ~4:1) is sampled as a strip the model cannot read:
+    # widen its short side, so it also sees the brows and nose. Only the crop grows; the mask
+    # (what is redrawn) stays the detected area.
+    from .settings import max_crop_aspect
+
+    crop_region = widen_to_aspect(crop_region, (w, h), max_crop_aspect())
     x1, y1, x2, y2 = crop_region
     crop = crop_image(image, crop_region)
     crop_mask = crop_region_mask((w, h), det, unit.dilate, crop_region)

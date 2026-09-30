@@ -45,6 +45,33 @@ def make_crop_region(
     return nx1, ny1, nx2, ny2
 
 
+def widen_to_aspect(
+    region: tuple[int, int, int, int],
+    image_size: tuple[int, int],
+    max_ratio: float,
+) -> tuple[int, int, int, int]:
+    """Grow the short side of a crop so long / short is at most max_ratio, around the same
+    centre, slid (not squeezed) to stay inside the image. The long side never changes."""
+    if not max_ratio or max_ratio < 1:
+        return region
+    w, h = image_size
+    x1, y1, x2, y2 = region
+    cw, ch = x2 - x1, y2 - y1
+    if cw <= 0 or ch <= 0:
+        return region
+    if cw > ch * max_ratio:
+        need = min(h, int(math.ceil(cw / max_ratio)))
+        cy = (y1 + y2) / 2.0
+        top = int(round(min(max(0.0, cy - need / 2.0), h - need)))
+        return x1, top, x2, top + need
+    if ch > cw * max_ratio:
+        need = min(w, int(math.ceil(ch / max_ratio)))
+        cx = (x1 + x2) / 2.0
+        left = int(round(min(max(0.0, cx - need / 2.0), w - need)))
+        return left, y1, left + need, y2
+    return region
+
+
 def scale_for_guide(
     crop_wh: tuple[int, int],
     bbox_wh: tuple[int, int],
