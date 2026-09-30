@@ -431,6 +431,12 @@ MASTER_LINKS = {
     "inpaint_w": "use_wh",
     "inpaint_h": "use_wh",
 }
+# what "Write ... into the tabs" copies: the same for every part of the body
+ENGINE_FIELDS = [
+    "use_separate_checkpoint", "checkpoint", "use_separate_vae", "vae",
+    "use_separate_steps", "steps", "use_separate_cfg", "cfg",
+    "use_separate_sampler", "sampler", "scheduler",
+]
 # choices that mean "same as the main generation": they do not tick the box
 MASTER_SAME = {"Use same sampler", "Use same scheduler", SAME_CHECKPOINT, SAME_VAE}
 
@@ -455,7 +461,9 @@ def _master_ui(prefix: str, first: dict) -> dict:
     w = {}
 
     gr.Markdown(
-        "Changes here go straight into the tabs. Setting steps, CFG, sampler, checkpoint, VAE or size "
+        "Changes here go straight into the tabs. Denoise, blur, crop and size suit a face or an eye very "
+        "differently: set those with *Enabled tabs only*, or one tab at a time. Setting steps, CFG, sampler, "
+        "checkpoint, VAE or size "
         "also ticks the tabs' matching *Use separate* box.",
         elem_classes="iad-all-hint",
     )
@@ -518,7 +526,7 @@ def _master_ui(prefix: str, first: dict) -> dict:
         w["force_inpaint"] = gr.Checkbox(value=val("force_inpaint"), label="force_inpaint (all)",
                                          elem_id=eid("force_inpaint"))
     w["cycle"] = gr.Slider(1, 10, value=val("cycle"), step=1, label="cycle (all)", elem_id=eid("cycle"))
-    w["apply"] = gr.Button("Write all of these into the tabs", elem_id=eid("apply"))
+    w["apply"] = gr.Button("Write checkpoint, VAE, steps, CFG and sampler into the tabs", elem_id=eid("apply"))
     for name, widget in w.items():
         if name not in ("apply",):
             try:
@@ -576,11 +584,17 @@ def _bind_master(w: dict, tabs: list[dict]) -> None:
         except Exception as exc:
             print(f"[Impact ADetailer] all-tabs control for {field} not wired: {exc}")
 
+    # The button writes what is the same for every part of the body: the model and how it samples.
+    # Denoise, blurs, crop, guide and max size depend on the size of the area (a face, an eye, a
+    # hand) and are only written when they are moved one by one: copying a face's values onto the
+    # eye tabs wiped the eyes out.
+    engine = [f for f in ENGINE_FIELDS if f in w]
+
     def apply_all(scope, *values_and_flags):
-        values, flags = values_and_flags[: len(fields)], values_and_flags[len(fields):]
+        values, flags = values_and_flags[: len(engine)], values_and_flags[len(engine):]
         aim = targets(scope, flags)
         out = []
-        for field, value in zip(fields, values):
+        for field, value in zip(engine, values):
             if field in ("checkpoint", "vae"):
                 out += [gr.update(value=value, interactive=value not in MASTER_SAME) if a else gr.update() for a in aim]
             else:
@@ -588,8 +602,8 @@ def _bind_master(w: dict, tabs: list[dict]) -> None:
         return out
 
     try:
-        w["apply"].click(apply_all, inputs=[w["scope"]] + [w[f] for f in fields] + enabled,
-                         outputs=[t[f] for f in fields for t in tabs], show_progress=NO_PROGRESS)
+        w["apply"].click(apply_all, inputs=[w["scope"]] + [w[f] for f in engine] + enabled,
+                         outputs=[t[f] for f in engine for t in tabs], show_progress=NO_PROGRESS)
     except Exception as exc:
         print(f"[Impact ADetailer] all-tabs button not wired: {exc}")
 

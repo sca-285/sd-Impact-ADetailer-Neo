@@ -372,9 +372,15 @@ def enhance_one(
     work = resize_lanczos(crop, (tw, th))
     work_mask_img = None
     soft_mask = False
+    # Blur radii are in image pixels whatever the size of the area. A blur that suits a face
+    # (10-12 px) wipes out a mask a few pixels thick (an eye, a mouth): the redrawn part is
+    # pasted back at half strength or less and reads as a smear. Keep each blur under a
+    # quarter of the mask's short side.
+    blur_cap = _blur_cap(crop_mask)
+    paste_feather = _capped(int(unit.feather or 0), blur_cap, "mask blur", index)
     if unit.noise_mask:
         noise_mask = crop_mask
-        feather = int(getattr(unit, "noise_mask_feather", 0) or 0)
+        feather = _capped(int(getattr(unit, "noise_mask_feather", 0) or 0), blur_cap, "noise mask feather", index)
         if feather > 0:
             # Impact Pack blurs the noise mask and lets the model blend the
             # boundary, instead of denoising hard up to a line and hiding the
@@ -429,8 +435,28 @@ def enhance_one(
 
     if refined.size != crop.size:
         refined = resize_lanczos(refined, crop.size)
-    paste_mask = gaussian_feather(crop_mask, unit.feather)
+    paste_mask = gaussian_feather(crop_mask, paste_feather)
     return paste_pixel(image, refined, (x1, y1), paste_mask)
+
+
+def _blur_cap(mask: np.ndarray) -> int:
+    """A quarter of the short side of the mask's solid part, in pixels (at least 1)."""
+    solid = np.asarray(mask) > 0.5
+    if not solid.any():
+        return 1
+    rows = np.flatnonzero(solid.any(axis=1))
+    cols = np.flatnonzero(solid.any(axis=0))
+    short = min(rows[-1] - rows[0] + 1, cols[-1] - cols[0] + 1)
+    return max(1, int(short) // 4)
+
+
+def _capped(radius: int, cap: int, what: str, index: int) -> int:
+    if radius <= cap:
+        return radius
+    from .settings import log
+
+    log(f"detection {index + 1}: {what} {radius} px lowered to {cap} px, the area is too small for more")
+    return cap
 
 
 def _crop_sheet(
