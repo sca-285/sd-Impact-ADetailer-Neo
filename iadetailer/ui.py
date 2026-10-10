@@ -3,7 +3,15 @@ from __future__ import annotations
 import gradio as gr
 
 from . import uistate
-from .args import ORDINALS, UNIT_COUNT, RunArgs, UnitArgs
+from .args import (
+    ORDINALS,
+    REPAINT_ALL,
+    REPAINT_MODES,
+    UNIT_COUNT,
+    InspectorArgs,
+    RunArgs,
+    UnitArgs,
+)
 from .detect import list_detector_models
 from .preview import MODES as PREVIEW_MODES
 from .settings import max_tabs, remember_ui
@@ -12,6 +20,13 @@ from .modelswitch import SAME_CHECKPOINT, SAME_VAE, list_checkpoints, list_vaes
 # The controls above the tabs, in the order build_ui returns them. Everything
 # after these is the repeating per-tab block.
 HEAD_KEYS = ["enable", "save_before", "preview"]
+# The Anatomy Inspector controls. Drawn above the tabs, but passed to the script
+# AFTER the per-tab block, so API calls written for the older layout still line up.
+INSPECTOR_KEYS = ["enable", "profile", "overlay", "score"]
+INSPECTOR_INFOTEXT = {
+    "enable": "Impact ADetailer inspector",
+    "profile": "Impact ADetailer inspector profile",
+}
 
 def _sam_choices() -> list[str]:
     try:
@@ -82,6 +97,7 @@ FIELD_KEYS: list[tuple[str, str | None]] = [
     ("cn_weight", "controlnet weight"),
     ("cn_start", None),
     ("cn_end", None),
+    ("repaint", "repaint"),
 ]
 
 MERGE_MODES = ["None", "Merge", "Merge and invert"]
@@ -217,6 +233,13 @@ def _unit_ui(n: int, models: list[str], prefix: str, saved: dict | None = None) 
             "Detector" + sfx,
             "YOLO / YOLO-seg weights from models/adetailer.",
             elem_id=eid("model"))
+        repaint = gr.Radio(
+            choices=REPAINT_MODES,
+            value=val("repaint", REPAINT_ALL, REPAINT_MODES),
+            label="Repaint" + sfx,
+            info="Only flagged = only boxes on a hand the Anatomy Inspector found wrong.",
+            elem_id=eid("repaint"),
+        )
         prompt = gr.Textbox(
             label="Prompt" + sfx,
             info="Empty = main prompt. [SEP] per box, [CLASS:face], [SKIP], [PROMPT].",
@@ -375,6 +398,22 @@ def _unit_ui(n: int, models: list[str], prefix: str, saved: dict | None = None) 
                     0.0, 1.0, value=val("cn_end", 1.0), step=0.01,
                     label="Guidance end" + sfx, elem_id=eid("cn_end"),
                 )
+            gr.Markdown(
+                "**Hand depth (Inspector)** as the preprocessor: a clean five-finger depth map from the "
+                "Inspector's hand landmarks. Pick a Depth model (or Union in depth mode)."
+            )
+            try:
+                from .controlnet import HAND_DEPTH, HAND_DEPTH_END, HAND_DEPTH_WEIGHT
+
+                def _hand_depth_defaults(module):
+                    if module == HAND_DEPTH:
+                        return gr.update(value=HAND_DEPTH_WEIGHT), gr.update(value=HAND_DEPTH_END)
+                    return gr.update(), gr.update()
+
+                event = cn_module.input if hasattr(cn_module, "input") else cn_module.change
+                event(_hand_depth_defaults, inputs=[cn_module], outputs=[cn_weight, cn_end])
+            except Exception:
+                pass
 
         with gr.Accordion("Impact loop", open=False):
             gr.Markdown("Crop around the box, scale to guide_size, sample, paste back. Same loop as Impact Pack FaceDetailer.")
@@ -404,6 +443,7 @@ def _unit_ui(n: int, models: list[str], prefix: str, saved: dict | None = None) 
         use_sam, sam_model, use_clip, clip_model, clip_threshold,
         classes, merge_mode,
         cn_model, cn_module, cn_weight, cn_start, cn_end,
+        repaint,
     ]
     return widgets, model
 
@@ -608,6 +648,62 @@ def _bind_master(w: dict, tabs: list[dict]) -> None:
         print(f"[Impact ADetailer] all-tabs button not wired: {exc}")
 
 
+def _inspector_ui(prefix: str, saved: dict) -> list:
+    """The Anatomy Inspector block. Returns its widgets in INSPECTOR_KEYS order."""
+    from .anatomy.profiles import NAMES as PROFILES
+
+    D = InspectorArgs()
+    saved = saved or {}
+
+    def eid(name: str) -> str:
+        return f"{prefix}_inspector_{name}"
+
+    gr.Markdown(
+        "Finds wrong hands (extra or missing fingers) and body problems before the tabs run. "
+        "A tab set to **Repaint: Only flagged** then redraws only the hands it flagged. "
+        "Body findings are warnings: a repaint cannot remove an arm.",
+        elem_classes="iad-all-hint",
+    )
+    with gr.Row():
+        enable = gr.Checkbox(label="Enable Anatomy Inspector", value=bool(saved.get("enable", D.enable)),
+                             elem_id=eid("enable"))
+        profile = gr.Radio(PROFILES, value=uistate.pick_choice(saved.get("profile"), D.profile, PROFILES),
+                           label="Profile", elem_id=eid("profile"))
+    with gr.Row():
+        overlay = gr.Checkbox(label="Show overlay in comparer", value=bool(saved.get("overlay", D.overlay)),
+                              elem_id=eid("overlay"))
+        score = gr.Checkbox(label="Write score to infotext", value=bool(saved.get("score", D.score)),
+                            elem_id=eid("score"))
+    try:
+        from .anatomy.models import status_markdown
+
+        status_text = status_markdown()
+    except Exception as exc:
+        status_text = f"Inspector status unavailable: {exc}"
+    status = gr.Markdown(status_text, elem_id=eid("status"))
+    with gr.Row():
+        check = gr.Button("Check models", elem_id=eid("check"), elem_classes="iad-tall")
+        fetch = gr.Button("Download DWPose models", elem_id=eid("download"), elem_classes="iad-tall")
+
+    def _check():
+        from .anatomy.models import status_markdown
+
+        return gr.update(value=status_markdown())
+
+    def _fetch():
+        from .anatomy.models import download, status_markdown
+
+        note = download()
+        return gr.update(value=f"{note}  \n{status_markdown()}")
+
+    try:
+        check.click(_check, inputs=[], outputs=[status])
+        fetch.click(_fetch, inputs=[], outputs=[status])
+    except Exception:
+        pass
+    return [enable, profile, overlay, score]
+
+
 def tab_name(is_img2img: bool) -> str:
     return "img2img" if is_img2img else "txt2img"
 
@@ -652,6 +748,8 @@ def build_ui(is_img2img: bool = False) -> list:
             )
         widgets = [enable, save_before, preview]
         dropdowns = []
+        with gr.Accordion("🦴 Anatomy Inspector", open=False, elem_id=f"{prefix}_inspector"):
+            inspector_widgets = _inspector_ui(prefix, saved.get("inspector") or {})
         with gr.Accordion("🎛️ All tabs at once (inpainting)", open=False, elem_id=f"{prefix}_all"):
             master = _master_ui(prefix, saved_units[0] if saved_units else {})
         tab_fields = []
@@ -663,6 +761,7 @@ def build_ui(is_img2img: bool = False) -> list:
                 dropdowns.append(model_dropdown)
                 tab_fields.append(dict(zip([name for name, _ in FIELD_KEYS], unit_widgets)))
         _bind_master(master, tab_fields)
+        widgets.extend(inspector_widgets)
 
         def _rescan():
             found = list_detector_models()
@@ -678,6 +777,8 @@ def build_ui(is_img2img: bool = False) -> list:
             for n in range(max_tabs()):
                 for value in _factory_values(n, fresh):
                     values.append(value)
+            insp = InspectorArgs()
+            values.extend(getattr(insp, name) for name in INSPECTOR_KEYS)
             return [gr.update(value=v) for v in values[: len(widgets)]]
 
         try:
@@ -717,23 +818,42 @@ def infotext_key(unit_index: int, label: str) -> str:
     return f"Impact ADetailer {ORDINALS[unit_index]} {label}"
 
 
-def infotext_fields(widgets: list) -> list:
+def _layout(n_args: int) -> tuple[int, int]:
+    """(per-tab arg count, Inspector args at the end): 0 for a call written
+    before the Inspector existed."""
     per = len(FIELD_KEYS)
+    rest = max(0, n_args - len(HEAD_KEYS))
+    if rest % per == len(INSPECTOR_KEYS):
+        return per, len(INSPECTOR_KEYS)
+    if rest % per and rest % (per - 1) == 0:
+        return per - 1, 0           # written before the Repaint field existed
+    return per, 0
+
+
+def infotext_fields(widgets: list) -> list:
+    per, tail = _layout(len(widgets))
     pairs = []
     # The head controls carry no infotext of their own: "save a copy" and "draw
     # the boxes" are things you do to a run, not settings that reproduce it.
-    for slot, widget in enumerate(widgets[len(HEAD_KEYS):]):
+    body = widgets[len(HEAD_KEYS) : len(widgets) - tail]
+    for slot, widget in enumerate(body):
         unit, offset = divmod(slot, per)
         if unit >= len(ORDINALS):
             break
         label = FIELD_KEYS[offset][1]
         if label:
             pairs.append((widget, infotext_key(unit, label)))
+    if tail:
+        for name, widget in zip(INSPECTOR_KEYS, widgets[len(widgets) - tail :]):
+            key = INSPECTOR_INFOTEXT.get(name)
+            if key:
+                pairs.append((widget, key))
     return pairs
 
 
-def infotext_params(units: list[UnitArgs]) -> dict:
+def infotext_params(units: list[UnitArgs], inspector: InspectorArgs | None = None) -> dict:
     params: dict = {}
+    inspecting = bool(inspector is not None and inspector.enable)
     for i, unit in enumerate(units):
         if not unit.enabled or unit.model in ("", "None"):
             continue
@@ -749,8 +869,31 @@ def infotext_params(units: list[UnitArgs]) -> dict:
                 continue
             if value in ("Use same checkpoint", "Use same VAE"):
                 continue
+            # Repaint only means something with the Inspector; without it the
+            # default stays out of the infotext, which keeps older images' text as it was.
+            if name == "repaint" and value == REPAINT_ALL and not inspecting:
+                continue
             params[infotext_key(i, label)] = value
+    if inspecting:
+        params[INSPECTOR_INFOTEXT["enable"]] = True
+        params[INSPECTOR_INFOTEXT["profile"]] = inspector.profile
     return params
+
+
+def parse_inspector(args: tuple) -> InspectorArgs:
+    per, tail = _layout(len(args))
+    if not tail:
+        return InspectorArgs()
+    c = list(args[len(args) - tail :])
+    from .anatomy.profiles import NAMES
+
+    profile = str(c[1] or "")
+    return InspectorArgs(
+        enable=bool(c[0]),
+        profile=profile if profile in NAMES else InspectorArgs().profile,
+        overlay=bool(c[2]),
+        score=bool(c[3]),
+    )
 
 
 def parse_args(args: tuple) -> tuple[RunArgs, list[UnitArgs]]:
@@ -760,8 +903,8 @@ def parse_args(args: tuple) -> tuple[RunArgs, list[UnitArgs]]:
         save_before=bool(args[1]) if len(args) > 1 else False,
         preview=str(args[2] or "Off") if len(args) > 2 else "Off",
     )
-    raw = list(args[head:])
-    per = len(FIELD_KEYS)
+    per, tail = _layout(len(args))
+    raw = list(args[head : len(args) - tail])
     units: list[UnitArgs] = []
     n_units = min(UNIT_COUNT, max(max_tabs(), len(raw) // per))
     for i in range(n_units):
@@ -769,6 +912,7 @@ def parse_args(args: tuple) -> tuple[RunArgs, list[UnitArgs]]:
         if len(c) < per:
             units.append(UnitArgs(enabled=False))
             continue
+        repaint = str(c[50] or REPAINT_ALL) if len(c) > 50 else REPAINT_ALL
         units.append(
             UnitArgs(
                 enabled=bool(c[0]),
@@ -821,6 +965,7 @@ def parse_args(args: tuple) -> tuple[RunArgs, list[UnitArgs]]:
                 cn_weight=float(c[47]),
                 cn_start=float(c[48]),
                 cn_end=float(c[49]),
+                repaint=repaint if repaint in REPAINT_MODES else REPAINT_ALL,
             )
         )
     return run, units

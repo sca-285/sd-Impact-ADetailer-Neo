@@ -12,6 +12,7 @@ ROOT = PACKAGE_DIR.parent
 def _source_files() -> list[Path]:
     files: list[Path] = []
     files.extend(sorted(PACKAGE_DIR.glob("*.py")))
+    files.extend(sorted(PACKAGE_DIR.glob("*/*.py")))
     files.extend(sorted((ROOT / "scripts").glob("*.py")))
     files.extend(sorted((ROOT / "javascript").glob("*.js")))
     return files

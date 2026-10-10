@@ -22,7 +22,7 @@ import threading
 from dataclasses import fields
 from pathlib import Path
 
-from .args import RunArgs, UnitArgs
+from .args import InspectorArgs, RunArgs, UnitArgs
 from .paths import _webui_root
 
 FILENAME = "impact-adetailer-ui.json"
@@ -90,19 +90,27 @@ def load(tab: str) -> dict:
     if not isinstance(section, dict):
         return {}
     units = section.get("units")
+    inspector = section.get("inspector")
     return {
         "enable": bool(section.get("enable", False)),
         "save_before": bool(section.get("save_before", False)),
         "preview": str(section.get("preview", "Off") or "Off"),
         "units": [u if isinstance(u, dict) else {} for u in units] if isinstance(units, list) else [],
+        "inspector": inspector if isinstance(inspector, dict) else {},
     }
 
 
-def save(tab: str, run: RunArgs, units: list[UnitArgs]) -> None:
+def save(tab: str, run: RunArgs, units: list[UnitArgs], inspector: InspectorArgs | None = None) -> None:
     payload = {
         "enable": bool(run.enable),
         "save_before": bool(run.save_before),
         "preview": str(run.preview or "Off"),
+        "inspector": {
+            "enable": bool(inspector.enable),
+            "profile": str(inspector.profile),
+            "overlay": bool(inspector.overlay),
+            "score": bool(inspector.score),
+        } if inspector is not None else {},
         "units": [
             {name: getattr(unit, name) for name in FIELD_TYPES if hasattr(unit, name)}
             for unit in units

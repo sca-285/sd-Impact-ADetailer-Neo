@@ -6,6 +6,10 @@ from .settings import ORDINALS, max_tabs
 
 UNIT_COUNT = 8  # hard cap; live count is settings.max_tabs()
 
+REPAINT_ALL = "All detections"
+REPAINT_FLAGGED = "Only flagged by Inspector"
+REPAINT_MODES = [REPAINT_ALL, REPAINT_FLAGGED]
+
 
 @dataclass
 class RunArgs:
@@ -14,6 +18,16 @@ class RunArgs:
     enable: bool = False
     save_before: bool = False
     preview: str = "Off"
+
+
+@dataclass
+class InspectorArgs:
+    """The Anatomy Inspector block above the tabs."""
+
+    enable: bool = False
+    profile: str = "Realistic"
+    overlay: bool = True
+    score: bool = True
 
 
 @dataclass
@@ -68,3 +82,4 @@ class UnitArgs:
     cn_weight: float = 1.0
     cn_start: float = 0.0
     cn_end: float = 1.0
+    repaint: str = REPAINT_ALL

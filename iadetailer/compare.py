@@ -20,6 +20,7 @@ _DIR: Path | None = None
 
 ORIGINAL = "original"
 DETAILED = "detailed"
+OVERLAY = "overlay"
 
 # The comparer is never wider than ~1100 css px, so there is nothing to gain
 # from keeping full-resolution PNGs around for it. Encoding the preview once at
@@ -61,17 +62,26 @@ def start_run() -> int:
         return _RUN
 
 
-def _write_preview(image: Image.Image, path: Path) -> None:
-    w, h = image.size
+def preview_size(size: tuple[int, int]) -> tuple[int, int]:
+    """The size the comparer stores a picture of `size` at. An overlay drawn at
+    exactly this size lines up with both sides."""
+    w, h = size
     scale = min(1.0, float(PREVIEW_MAX) / max(w, h))
     if scale < 1.0:
-        image = image.resize(
-            (max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS
-        )
+        return max(1, int(w * scale)), max(1, int(h * scale))
+    return w, h
+
+
+def _write_preview(image: Image.Image, path: Path) -> None:
+    size = preview_size(image.size)
+    if size != image.size:
+        image = image.resize(size, Image.Resampling.LANCZOS)
     image.save(path, format="JPEG", quality=PREVIEW_QUALITY, optimize=False)
 
 
-def save_pair(original: Image.Image, detailed: Image.Image) -> dict:
+def save_pair(original: Image.Image, detailed: Image.Image, overlay: Image.Image | None = None) -> dict:
+    """`overlay`, when given, is a transparent RGBA picture at preview_size()
+    drawn over both sides (the Anatomy Inspector's findings)."""
     global _INDEX, _REV
     with _LOCK:
         _INDEX += 1
@@ -86,6 +96,17 @@ def save_pair(original: Image.Image, detailed: Image.Image) -> dict:
     detailed = detailed.convert("RGB")
     _write_preview(original, original_p)
     _write_preview(detailed, detailed_p)
+    overlay_p = None
+    if overlay is not None:
+        overlay_p = folder / f"{stem}_{OVERLAY}.png"
+        try:
+            target = preview_size(detailed.size)
+            if overlay.size != target:
+                overlay = overlay.resize(target, Image.Resampling.BILINEAR)
+            overlay.save(overlay_p, format="PNG")
+        except Exception as exc:
+            print(f"[Impact ADetailer] could not save the inspector overlay: {exc}")
+            overlay_p = None
     rec = {
         "run": run,
         "rev": rev,
@@ -93,6 +114,7 @@ def save_pair(original: Image.Image, detailed: Image.Image) -> dict:
         "slot": 0,
         ORIGINAL: str(original_p),
         DETAILED: str(detailed_p),
+        OVERLAY: str(overlay_p) if overlay_p else "",
         "w": detailed.width,
         "h": detailed.height,
     }
@@ -142,7 +164,8 @@ def state() -> dict:
         "show": bool(show_comparer()),
         "count": len(items),
         "pairs": [
-            {"slot": r["slot"], "index": r["index"], "w": r["w"], "h": r["h"]}
+            {"slot": r["slot"], "index": r["index"], "w": r["w"], "h": r["h"],
+             "overlay": bool(r.get(OVERLAY))}
             for r in items
         ],
     }
@@ -158,12 +181,14 @@ def _record(slot: int) -> dict | None:
 
 
 def image_bytes(slot: int, side: str) -> bytes | None:
-    """JPEG preview of one side of one pair. side is 'original' or 'detailed'.
-    Already encoded at save time, so this is a file read."""
+    """JPEG preview of one side of one pair. side is 'original' or 'detailed'
+    ('overlay' gives the inspector's PNG). Already encoded at save time, so
+    this is a file read."""
     rec = _record(slot)
     if not rec:
         return None
-    path = rec.get(ORIGINAL if side == ORIGINAL else DETAILED)
+    key = side if side in (ORIGINAL, OVERLAY) else DETAILED
+    path = rec.get(key)
     if not path:
         return None
     try:
@@ -182,3 +207,4 @@ class CompareStore:
     image_bytes = staticmethod(image_bytes)
     cleanup = staticmethod(cleanup)
     session_dir = staticmethod(_dir)
+    preview_size = staticmethod(preview_size)

@@ -222,8 +222,11 @@ def _arm_controlnet(job: Any, parent: Any, cfg: dict) -> bool:
             weight=cfg.get("weight", 1.0),
             start=cfg.get("start", 0.0),
             end=cfg.get("end", 1.0),
+            image=cfg.get("image"),
         ):
             return True
+        if cfg.get("module") == controlnet.HAND_DEPTH and cfg.get("image") is None:
+            return False
         if not _CN_WARNED:
             _CN_WARNED = True
             reason = (

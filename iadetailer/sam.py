@@ -304,6 +304,67 @@ def refine_with_sam(
     return out
 
 
+def segment_with_points(
+    image: Image.Image,
+    bbox,
+    points,
+    model_name: str,
+) -> np.ndarray | None:
+    """One full-image 0..1 mask from a box plus positive point prompts (the
+    Anatomy Inspector passes hand landmarks). None when SAM is unavailable or
+    returns nothing."""
+    if model_name in ("", "None", None):
+        return None
+    try:
+        model, kind = _get(model_name)
+    except Exception as exc:
+        log(f"SAM load failed: {exc}")
+        return None
+    if model is None:
+        return None
+    pts = np.asarray(points, dtype=np.float32).reshape(-1, 2)
+    x1, y1, x2, y2 = [float(v) for v in bbox]
+    mask = None
+    try:
+        if kind == "ultralytics":
+            arr = np.array(image.convert("RGB"))
+            kwargs = {
+                "bboxes": [[x1, y1, x2, y2]],
+                "points": [pts.tolist()],
+                "labels": [[1] * len(pts)],
+                "verbose": False,
+            }
+            try:
+                results = model.predict(arr, **kwargs)
+            except Exception:
+                # Older ultralytics SAM takes boxes or points, not both.
+                kwargs.pop("bboxes", None)
+                results = model.predict(arr, **kwargs)
+            masks = getattr(results[0], "masks", None) if results else None
+            if masks is not None and getattr(masks, "data", None) is not None:
+                mask = _best_mask(masks.data.cpu().numpy(), None)
+        else:
+            arr = np.array(image.convert("RGB"))
+            model.set_image(arr)
+            masks, scores, _ = model.predict(
+                point_coords=pts,
+                point_labels=np.ones(len(pts), dtype=np.int32),
+                box=np.array([x1, y1, x2, y2], dtype=np.float32),
+                multimask_output=True,
+            )
+            mask = _best_mask(np.asarray(masks), np.asarray(scores) if scores is not None else None)
+    except Exception as exc:
+        log(f"SAM point prompt failed: {exc}")
+        return None
+    if mask is None:
+        return None
+    w, h = image.size
+    if mask.shape != (h, w):
+        m = Image.fromarray((np.clip(mask, 0, 1) * 255).astype(np.uint8), mode="L")
+        mask = np.asarray(m.resize((w, h), Image.BILINEAR), dtype=np.float32) / 255.0
+    return mask.astype(np.float32)
+
+
 def clear_sam_cache() -> None:
     keys = list(_CACHE.keys())
     for key in keys:

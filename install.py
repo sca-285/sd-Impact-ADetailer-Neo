@@ -1,4 +1,4 @@
-"""WebUI startup hook. Installs ultralytics / opencv if missing."""
+"""WebUI startup hook. Installs ultralytics / opencv / onnxruntime if missing."""
 
 from __future__ import annotations
 
@@ -39,4 +39,40 @@ def _main() -> None:
             print(f"[Impact ADetailer] install it by hand: pip install \"{spec}\"")
 
 
+def _onnxruntime_spec() -> str:
+    """onnxruntime-gpu where torch runs on CUDA 12 (the CUDA the stock GPU
+    wheels are built for), the CPU build everywhere else. The Anatomy Inspector
+    also runs without either, through cv2.dnn, only slower."""
+    try:
+        import torch
+
+        cuda = str(getattr(torch.version, "cuda", "") or "")
+        if torch.cuda.is_available() and cuda.startswith("12"):
+            return "onnxruntime-gpu"
+    except Exception:
+        pass
+    return "onnxruntime"
+
+
+def _onnxruntime() -> None:
+    """For the Anatomy Inspector. Skipped when any onnxruntime build imports."""
+    try:
+        import launch
+    except Exception:
+        return
+    try:
+        import onnxruntime  # noqa: F401
+
+        return
+    except Exception:
+        pass
+    spec = _onnxruntime_spec()
+    try:
+        launch.run_pip(f'install "{spec}"', f"Impact ADetailer: {spec} (Anatomy Inspector)")
+    except Exception as exc:
+        print(f"[Impact ADetailer] could not install {spec}: {exc}")
+        print("[Impact ADetailer] the Anatomy Inspector falls back to cv2.dnn on the CPU")
+
+
 _main()
+_onnxruntime()

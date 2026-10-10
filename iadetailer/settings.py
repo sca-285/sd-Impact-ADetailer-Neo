@@ -253,6 +253,16 @@ def register_settings() -> None:
             section=section,
         ),
     )
+    for key, label in (
+        ("iad_inspector_hand_model",
+         "Anatomy Inspector: hand detector (empty = the first one with 'hand' in its name, a -seg one "
+         "preferred; None = off). A -seg model also gives the hand masks the finger check needs"),
+        ("iad_inspector_face_model",
+         "Anatomy Inspector: face detector used to count faces for the fused-bodies check (empty = automatic, None = off)"),
+        ("iad_inspector_sam_model",
+         "Anatomy Inspector: SAM weights for hand masks when there is no hand -seg model (empty = automatic, None = off)"),
+    ):
+        add(key, OptionInfo("", label, gr.Textbox, {"lines": 1}, section=section))
     add("iad_show_comparer", OptionInfo(True, "Show the before/after splitter under the result gallery", section=section))
     add(
         "iad_max_preview_sheets",

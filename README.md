@@ -96,6 +96,109 @@ Same order as FaceDetailer:
 
 Set **Masked padding** to 0 to match FaceDetailer `crop_factor` exactly.
 
+## Anatomy Inspector
+
+A judgement layer in front of the tabs. A plain hand tab repaints every hand it
+finds, good ones included, and has the same odds of drawing six fingers again.
+The Inspector looks first:
+
+1. **Inspect**: DWPose puts a skeleton and 21 points per hand on every person.
+2. **Gate**: a tab set to **Repaint: Only flagged by Inspector** repaints only the
+   boxes that sit on a hand the Inspector found wrong. The others are drawn grey
+   on the detection sheet ("not flagged") and left exactly as they were.
+3. **Guide**: with the ControlNet preprocessor **Hand depth (Inspector)**, a flagged
+   hand is repainted against a clean five-finger depth map built from its landmarks.
+4. **Report**: skeleton, hand capsules and findings over the comparer (toggle
+   *Anatomy overlay* in the dock), a short score in the infotext
+   (`Anatomy score: 87 (hand_shape x1)`), and one console line per image:
+   `[Impact ADetailer] Inspector: score 74, 2 findings (hand_shape p0 left ≈6 fingers, head_ratio p1 ...)`.
+
+### What it checks
+
+| Finding | How | Fixable |
+|---|---|---|
+| `hand_shape` | The 21 landmarks are rendered as a five-finger capsule hand and laid over the real hand mask. Hand pixels no finger explains (extra finger, blob) and rendered fingers with no pixels under them (missing finger) are measured; fingertips on the mask outline are counted as a second opinion. "≈N fingers" is only claimed when both agree. | yes |
+| `extra_hand` | More than two hand boxes inside one person, and no wrist reaches the extra one. Needs a hand detector. | no (a hand repaint does not remove an arm) |
+| `fused_bodies` | Two skeletons that share a whole limb, or more faces than skeletons inside overlapping people. | no |
+| `head_ratio` | Body height in heads, only for an upright person fully in frame, against the profile's range. | no |
+| `limb_asymmetry` | Left against right upper arm, forearm, thigh, shin, only when both sides point the same way. | no |
+
+### What it cannot do
+
+* **Count fingers from landmarks.** Pose models always return 21 points, also for a
+  six-finger hand. The count comes from the hand mask, so the finger check needs a
+  **hand-seg YOLO** model (any `*hand*seg*.pt` in `models/adetailer`) or **SAM**
+  weights in `models/sam`. Without either, hands are listed as "not checked".
+* Tell foreshortening from a short bone. Length checks are warnings only.
+* Joint hyperextension (not reliable from 2D points).
+* Anime hands: landmarks are weaker there. The Anime profile is more lenient and
+  caps hand confidence at 0.6.
+
+### Models
+
+DWPose, two onnx files:
+
+| File | Link |
+|---|---|
+| `yolox_l.onnx` | https://huggingface.co/yzd-v/DWPose/resolve/main/yolox_l.onnx |
+| `dw-ll_ucoco_384.onnx` | https://huggingface.co/yzd-v/DWPose/resolve/main/dw-ll_ucoco_384.onnx |
+
+If the ControlNet **dw_openpose_full** preprocessor has run once, they are already in
+`models/ControlNetPreprocessor/openpose` (Forge, reForge and Forge Neo all use that
+folder, or `--controlnet-preprocessor-models-dir`), and the Inspector uses them from
+there. Otherwise download them by hand into `models/iadetailer/anatomy/`. The
+**Download DWPose models** button does the same from Hugging Face, but large
+files are often faster by hand.
+
+* `onnxruntime` runs them (GPU when torch has CUDA 12, else CPU); `install.py` adds it
+  if missing. Without it, `cv2.dnn` on the CPU is used, as the WebUI's own DWPose does.
+* **MediaPipe** (optional, `pip install mediapipe`): sharper finger points on realistic
+  images under the Realistic profile. Wheels do not exist for every Python; if it
+  does not import, DWPose hand points are used and the console says so once.
+* Hand masks, hand boxes and face boxes come from your own detectors. Settings →
+  Impact ADetailer → *Anatomy Inspector: ...* picks them by name (empty = automatic,
+  `None` = off).
+
+The **Check models** button and the status line in the Inspector block show what was found.
+
+### Profiles
+
+| Profile | Head ratio | Hand checks |
+|---|---|---|
+| Realistic | 6.8 to 8.2 heads | full; MediaPipe preferred when installed |
+| Anime | 6.0 to 8.5 heads | lenient thresholds, confidence capped at 0.6 |
+| Stylised | not checked | lenient |
+
+Every threshold lives in `iadetailer/anatomy/profiles.py`.
+
+### Recommended hand tab
+
+| Setting | Value |
+|---|---|
+| Detector | a hand model, e.g. `hand_yolov8s.pt` |
+| Repaint | Only flagged by Inspector |
+| Denoise | 0.45 - 0.6 |
+| ControlNet model | an SDXL depth model, or Union in depth mode |
+| ControlNet preprocessor | Hand depth (Inspector) |
+| Weight / Guidance end | 0.6 / 0.6 (set automatically when the preprocessor is picked) |
+| cycle | 1 |
+
+### Notes
+
+* One inspection per image, on the image as it left the sampler, before the tabs.
+  The score describes that image.
+* Inspector off = the same pixels as before, byte for byte.
+* Enable, profile and each tab's Repaint are written to the infotext and come back
+  with *Send to txt2img*. The score is a measurement and is not read back.
+* The onnx sessions are freed with the other caches (UI reload, or
+  *Unload detector models after each generation*).
+
+### Tests
+
+```bash
+python -m pytest tests     # numpy, Pillow, opencv; gradio for tests/test_ui.py
+```
+
 ## ControlNet / checkpoint / VAE
 
 * **Passthrough** reuses the main generation's ControlNet units.
@@ -136,6 +239,10 @@ cycle.
 | Sort boxes | Area, large to small |
 | Same seed every tab | off |
 | Detector device | Automatic |
+
+## Credits
+
+Thanks also to **Claude**, Anthropic's AI assistant, for help building this extension.
 
 ## License
 

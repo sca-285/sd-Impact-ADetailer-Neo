@@ -6,7 +6,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .args import UnitArgs
+from .args import REPAINT_FLAGGED, InspectorArgs, UnitArgs
+from .controlnet import HAND_DEPTH
 from .detect import DetectorCache, Detection, run_detector
 from .geom import (
     bbox_size,
@@ -329,6 +330,7 @@ def enhance_one(
     seed: int,
     index: int = 0,
     unit_index: int = 0,
+    report=None,
 ) -> Image.Image:
     w, h = image.size
     dx = int(getattr(unit, "x_offset", 0) or 0)
@@ -408,6 +410,8 @@ def enhance_one(
     # read cleaner than one pass at a high one.
     cycles = max(1, min(10, int(getattr(unit, "cycle", 1) or 1)))
     cn = _controlnet_cfg(unit, p)
+    if cn is not None and cn["module"] == HAND_DEPTH:
+        cn["image"] = _hand_depth_guide(report, crop_region, (tw, th), index)
     refined = work
     for c in range(cycles):
         if c and _interrupted():
@@ -444,6 +448,59 @@ def enhance_one(
         refined = resize_lanczos(refined, crop.size)
     paste_mask = gaussian_feather(crop_mask, paste_feather)
     return paste_pixel(image, refined, (x1, y1), paste_mask)
+
+
+def _hand_depth_guide(report, crop_region, target, index: int):
+    """The clean five-finger depth map for the hands inside this crop, at the
+    size the crop is sampled at, or None when the Inspector has no hand there.
+    Every confident hand in the crop is drawn, flagged or not: a hand left out
+    of a depth map reads to the model as background."""
+    from .settings import log
+
+    if report is None or not getattr(report, "ok", False):
+        log(f"detection {index + 1}: hand depth needs the Anatomy Inspector on, ControlNet skipped")
+        return None
+    from .anatomy.inspect import hands_in_crop
+    from .anatomy.render import depth_to_image, render_hand_depth
+
+    found = hands_in_crop(report, crop_region)
+    if not found:
+        log(f"detection {index + 1}: no hand landmarks in this crop, hand depth skipped")
+        return None
+    x1, y1, x2, y2 = crop_region
+    tw, th = target
+    sx, sy = tw / float(max(1, x2 - x1)), th / float(max(1, y2 - y1))
+    hands = []
+    for _, _, pts, z in found:
+        local = np.asarray(pts, dtype=np.float64)[:, :2].copy()
+        local[:, 0] = (local[:, 0] - x1) * sx
+        local[:, 1] = (local[:, 1] - y1) * sy
+        hands.append((local, None if z is None else np.asarray(z, dtype=np.float64) * (sx + sy) / 2.0))
+    depth = render_hand_depth(hands, (th, tw))
+    log(f"detection {index + 1}: hand depth guide from {len(hands)} hand{'s' if len(hands) != 1 else ''}")
+    return depth_to_image(depth)
+
+
+def _flag_gate(dets, report, rejected):
+    """'Only flagged by Inspector': keep the detections that sit on a fixable
+    finding, grey out the rest on the detection sheet."""
+    if report is None or not getattr(report, "ok", False):
+        why = "Inspector off" if report is None else "Inspector: no report"
+        if dets:
+            print(f"[Impact ADetailer] Repaint is '{REPAINT_FLAGGED}' but there is no Inspector "
+                  f"report ({why}): {len(dets)} detection(s) left alone")
+        rejected.extend((d, why) for d in dets)
+        return []
+    from .anatomy.findings import overlaps
+
+    targets = [f.bbox for f in report.findings if f.fixable]
+    kept = []
+    for d in dets:
+        if any(overlaps(d.bbox, box) for box in targets):
+            kept.append(d)
+        else:
+            rejected.append((d, "not flagged"))
+    return kept
 
 
 def _blur_cap(mask: np.ndarray) -> int:
@@ -517,6 +574,7 @@ def run_unit(
     cache: DetectorCache,
     seed: int,
     unit_index: int = 0,
+    report=None,
 ) -> Image.Image:
     if not unit.enabled or unit.model in ("", "None"):
         return image
@@ -578,6 +636,9 @@ def run_unit(
             rejected.extend((d, "CLIP") for d in before if id(d) not in survived)
         except Exception as exc:
             print(f"[Impact ADetailer] CLIP filter failed: {exc}")
+
+    if getattr(unit, "repaint", "") == REPAINT_FLAGGED:
+        dets = _flag_gate(dets, report, rejected)
 
     if getattr(unit, "use_sam", False) and getattr(unit, "sam_model", "None") not in ("", "None"):
         try:
@@ -666,7 +727,7 @@ def run_unit(
                 # [SKIP] in that slot, or no [CLASS:] section claimed this class:
                 # leave the detection exactly as it is.
                 continue
-            out = enhance_one(out, det, unit, p, seed + i, index=i, unit_index=unit_index)
+            out = enhance_one(out, det, unit, p, seed + i, index=i, unit_index=unit_index, report=report)
         return out
     finally:
         swap.restore()
@@ -702,17 +763,69 @@ def _describe_sections(report: dict, unit: UnitArgs, dets, sections) -> None:
     report["prompt_sections"] = ", ".join(parts)
 
 
-def run_units(image: Image.Image, units: list[UnitArgs], p: Any) -> Image.Image:
+def run_inspector(image: Image.Image, inspector: InspectorArgs | None, p: Any, cache: DetectorCache):
+    """One Anatomy Inspector pass on the image as it came out of the sampler,
+    before any tab touches it. None when the Inspector is off."""
+    if inspector is None or not inspector.enable:
+        return None
+    try:
+        from .anatomy import inspect
+
+        report = inspect(image, inspector.profile, cache=cache)
+    except Exception as exc:
+        import traceback
+
+        print(f"[Impact ADetailer] Inspector failed: {type(exc).__name__}: {exc}")
+        traceback.print_exc()
+        return None
+    if report.ok:
+        print(f"[Impact ADetailer] {report.console()}")
+    else:
+        print(f"[Impact ADetailer] Inspector did not run: {'; '.join(report.notes)}")
+    shot = preview_mod.get(p)
+    if shot is not None and report.ok:
+        try:
+            shot.add(_inspector_sheet(image, report))
+        except Exception as exc:
+            print(f"[Impact ADetailer] inspector preview failed: {exc}")
+    return report
+
+
+def _inspector_sheet(image: Image.Image, report) -> Image.Image:
+    from .anatomy.render import _plain, draw_overlay
+
+    base = image.convert("RGBA")
+    base.alpha_composite(draw_overlay(report, image.size))
+    lines = [f"Anatomy Inspector {preview_mod.DOT} {report.profile} {preview_mod.DOT} score {report.infotext()}"]
+    lines += [_plain(f.label()) + f" {preview_mod.DOT} severity {f.severity:.2f}, confidence {f.confidence:.2f}"
+              for f in report.findings[:6]]
+    if report.notes:
+        lines.append("; ".join(report.notes[:4]))
+    return preview_mod._caption(base.convert("RGB"), lines)
+
+
+def run_units(
+    image: Image.Image,
+    units: list[UnitArgs],
+    p: Any,
+    inspector: InspectorArgs | None = None,
+) -> Image.Image:
     cache = DetectorCache()
     seed = image_seed(p)
     out = image.convert("RGB").copy()
     from .settings import same_seed
 
+    report = run_inspector(out, inspector, p, cache)
+    try:
+        p.iad_anatomy_report = report
+    except Exception:
+        pass
+
     keep = seed
     for i, unit in enumerate(units):
         if _interrupted():
             break
-        out = run_unit(out, unit, p, cache, seed, unit_index=i)
+        out = run_unit(out, unit, p, cache, seed, unit_index=i, report=report)
         if not same_seed():
             seed = keep + 17
             keep = seed

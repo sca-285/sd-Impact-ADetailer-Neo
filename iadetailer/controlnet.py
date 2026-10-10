@@ -16,6 +16,10 @@ for it. Three ways to go:
   <a model>    a fresh unit built for this crop, with the crop itself as the
                control image.
 
+With the preprocessor set to "Hand depth (Inspector)", the control image is not
+the crop but a clean five-finger hand depth map rendered from the Anatomy
+Inspector's hand landmarks (pick a Depth model, or a Union model in depth mode).
+
 Forge, ReForge and Forge Neo all ship ControlNet as a builtin whose package is
 `lib_controlnet`, and all three expose the same ControlNetUnit dataclass and the
 same global_state helpers (checked against the three trees, not assumed). A1111
@@ -30,6 +34,11 @@ from typing import Any
 
 NONE = "None"
 PASSTHROUGH = "Passthrough"
+HAND_DEPTH = "Hand depth (Inspector)"
+# What a tab starts from when Hand depth is picked: enough to hold the finger
+# count, loose enough to leave skin and light to the model.
+HAND_DEPTH_WEIGHT = 0.6
+HAND_DEPTH_END = 0.6
 
 # Which ControlNet families are worth offering for a face- or hand-sized crop.
 SUPPORTED_TYPES = ("Inpaint", "Tile", "Depth", "Lineart", "OpenPose", "Scribble", "Canny")
@@ -79,7 +88,8 @@ def list_modules() -> list[str]:
         except Exception:
             continue
     names.discard(NONE)
-    return [NONE, *sorted(names)]
+    names.discard(HAND_DEPTH)
+    return [NONE, HAND_DEPTH, *sorted(names)]
 
 
 def _find_script(runner, title: str):
@@ -124,8 +134,12 @@ def _only_controlnet(runner):
 
 
 def attach(job: Any, parent: Any, model: str, module: str, weight: float,
-           start: float, end: float) -> bool:
-    """Give `job` a script runner that will run ControlNet. True if it took."""
+           start: float, end: float, image=None) -> bool:
+    """Give `job` a script runner that will run ControlNet. True if it took.
+
+    `image`, when given, is the control image (a PIL image, any size: it is
+    scaled to the job) and the module is forced to None - it is already the
+    map the model wants. Otherwise the crop itself is the control image."""
     model = str(model or NONE)
     if model == NONE:
         return False
@@ -155,7 +169,21 @@ def attach(job: Any, parent: Any, model: str, module: str, weight: float,
 
     import numpy as np
 
-    image = np.asarray(job.init_images[0].convert("RGB"))
+    if image is not None:
+        from PIL import Image as _Image
+
+        control = image.convert("RGB")
+        size = (int(job.width), int(job.height))
+        if control.size != size:
+            control = control.resize(size, _Image.Resampling.BILINEAR)
+        image = np.asarray(control)
+        module = NONE
+    else:
+        image = np.asarray(job.init_images[0].convert("RGB"))
+    if module == HAND_DEPTH:
+        # No map was made for this crop (no hand landmarks in it): there is
+        # nothing to guide with.
+        return False
     unit_kwargs = {
         "enabled": True,
         # The whole crop is fair game: the detail pass already carries its own
@@ -201,4 +229,6 @@ def describe(model: str, module: str) -> str:
         return ""
     if model == PASSTHROUGH:
         return "ControlNet: passthrough"
+    if module == HAND_DEPTH:
+        return f"ControlNet: {model} / hand depth"
     return f"ControlNet: {model}" + (f" / {module}" if module and module != NONE else "")

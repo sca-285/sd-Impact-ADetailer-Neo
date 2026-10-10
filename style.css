@@ -39,3 +39,9 @@
 .iad-panel div.form {
     min-width: 0;
 }
+
+/* Buttons in the Anatomy Inspector block: at least 32 px tall. */
+.iad-panel button.iad-tall,
+.iad-panel .iad-tall button {
+    min-height: 32px;
+}
