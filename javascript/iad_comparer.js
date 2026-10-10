@@ -24,17 +24,6 @@
     var armedRun = -1;
     var dragging = false;
     var reportedBuild = "";
-    var OVERLAY_KEY = "iad-anatomy-overlay";
-
-    function overlayOn() {
-        try { return window.localStorage.getItem(OVERLAY_KEY) !== "0"; } catch (e) { return true; }
-    }
-
-    function setOverlayOn(on) {
-        try { window.localStorage.setItem(OVERLAY_KEY, on ? "1" : "0"); } catch (e) { /* private window */ }
-        var img = document.querySelector("#" + DOCK_ID + " .iad-overlay");
-        if (img) img.style.display = on ? "" : "none";
-    }
 
     function ensureStyle() {
         if (document.getElementById("iad-comparer-style")) return;
@@ -60,15 +49,7 @@
             "  border-radius: 3px; pointer-events: none; }",
             ".iad-tag-l { left: 8px; }",
             ".iad-tag-r { right: 8px; }",
-            ".iad-slider { width: 100%; margin: 8px 0 0; display: block; }",
-            ".iad-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%;",
-            "  object-fit: fill; z-index: 2; pointer-events: none; }",
-            "#iad-dock .iad-head { display: flex; align-items: center; justify-content: space-between;",
-            "  gap: 12px; margin: 0 0 6px; }",
-            "#iad-dock .iad-head .iad-title { margin: 0; }",
-            "#iad-dock .iad-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;",
-            "  min-height: 32px; cursor: pointer; opacity: .85; user-select: none; }",
-            "#iad-dock .iad-toggle input { width: 16px; height: 16px; margin: 0; }"
+            ".iad-slider { width: 100%; margin: 8px 0 0; display: block; }"
         ].join("\n");
         document.head.appendChild(s);
     }
@@ -158,30 +139,18 @@
         setPct(pct);
     }
 
-    function render(d, originalSrc, detailedSrc, hint, overlaySrc) {
-        var on = overlayOn();
-        var toggle = overlaySrc
-            ? '<label class="iad-toggle"><input type="checkbox" class="iad-overlay-toggle"' +
-              (on ? " checked" : "") + '/>Anatomy overlay</label>'
-            : "";
+    function render(d, originalSrc, detailedSrc, hint) {
         d.innerHTML =
-            '<div class="iad-head"><div class="iad-title" title="' + hint + '">ADetailer Comparer</div>' +
-            toggle + "</div>" +
+            '<div class="iad-title" title="' + hint + '">ADetailer Comparer</div>' +
             '<div class="iad-stage">' +
             '<img class="iad-detailed" alt="detailed" draggable="false" src="' + detailedSrc + '"/>' +
             '<img class="iad-original" alt="original" draggable="false" src="' + originalSrc + '"/>' +
-            (overlaySrc
-                ? '<img class="iad-overlay" alt="anatomy overlay" draggable="false" src="' + overlaySrc +
-                  '"' + (on ? "" : ' style="display:none"') + "/>"
-                : "") +
             '<div class="iad-bar"></div>' +
             '<span class="iad-tag iad-tag-l">original</span>' +
             '<span class="iad-tag iad-tag-r">detailed</span>' +
             "</div>" +
             '<input class="iad-slider" type="range" min="0" max="100" value="' + Math.round(pct) + '"/>';
         d.style.display = "";
-        var box = d.querySelector(".iad-overlay-toggle");
-        if (box) box.addEventListener("change", function () { setOverlayOn(box.checked); });
         bind(d);
     }
 
@@ -265,7 +234,6 @@
 
             var originalSrc = imageUrl(rec.slot, "original", data.run, rev);
             var detailedSrc = imageUrl(rec.slot, "detailed", data.run, rev);
-            var overlaySrc = rec.overlay ? imageUrl(rec.slot, "overlay", data.run, rev) : "";
             var key = [data.run, rec.slot, rev].join("|");
             if (key === lastKey && node.querySelector(".iad-stage")) {
                 bind(node);
@@ -274,8 +242,7 @@
             lastKey = key;
             render(
                 node, originalSrc, detailedSrc,
-                "#" + rec.index + " · run " + data.run + " · rev " + rev,
-                overlaySrc
+                "#" + rec.index + " · run " + data.run + " · rev " + rev
             );
         });
     }

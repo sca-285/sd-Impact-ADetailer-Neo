@@ -22,7 +22,7 @@ from .modelswitch import SAME_CHECKPOINT, SAME_VAE, list_checkpoints, list_vaes
 HEAD_KEYS = ["enable", "save_before", "preview"]
 # The Anatomy Inspector controls. Drawn above the tabs, but passed to the script
 # AFTER the per-tab block, so API calls written for the older layout still line up.
-INSPECTOR_KEYS = ["enable", "profile", "overlay", "score"]
+INSPECTOR_KEYS = ["enable", "profile", "score"]
 INSPECTOR_INFOTEXT = {
     "enable": "Impact ADetailer inspector",
     "profile": "Impact ADetailer inspector profile",
@@ -670,8 +670,6 @@ def _inspector_ui(prefix: str, saved: dict) -> list:
         profile = gr.Radio(PROFILES, value=uistate.pick_choice(saved.get("profile"), D.profile, PROFILES),
                            label="Profile", elem_id=eid("profile"))
     with gr.Row():
-        overlay = gr.Checkbox(label="Show overlay in comparer", value=bool(saved.get("overlay", D.overlay)),
-                              elem_id=eid("overlay"))
         score = gr.Checkbox(label="Write score to infotext", value=bool(saved.get("score", D.score)),
                             elem_id=eid("score"))
     try:
@@ -701,7 +699,7 @@ def _inspector_ui(prefix: str, saved: dict) -> list:
         fetch.click(_fetch, inputs=[], outputs=[status])
     except Exception:
         pass
-    return [enable, profile, overlay, score]
+    return [enable, profile, score]
 
 
 def tab_name(is_img2img: bool) -> str:
@@ -891,8 +889,7 @@ def parse_inspector(args: tuple) -> InspectorArgs:
     return InspectorArgs(
         enable=bool(c[0]),
         profile=profile if profile in NAMES else InspectorArgs().profile,
-        overlay=bool(c[2]),
-        score=bool(c[3]),
+        score=bool(c[2]),
     )
 
 

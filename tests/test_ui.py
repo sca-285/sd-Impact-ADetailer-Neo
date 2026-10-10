@@ -50,7 +50,7 @@ class Layout(unittest.TestCase):
         inspector = self.ui.parse_inspector(tuple(self._values()))
         self.assertFalse(inspector.enable)
         self.assertEqual(inspector.profile, "Realistic")
-        self.assertTrue(inspector.overlay)
+        self.assertTrue(inspector.score)
         self.assertEqual(units[0].repaint, "All detections")
         self.assertEqual(units[0].cn_end, 1.0)
 
@@ -78,8 +78,8 @@ class Layout(unittest.TestCase):
         values[head + 0] = True                       # tab 1 on
         values[head + 1] = "hand_yolov8s.pt"
         values[head + per - 1] = "Only flagged by Inspector"
-        values[-4] = True                             # inspector on
-        values[-3] = "Anime"
+        values[-3] = True                             # inspector on
+        values[-2] = "Anime"
         run, units = ui.parse_args(tuple(values))
         inspector = ui.parse_inspector(tuple(values))
         params = ui.infotext_params(units, inspector)
@@ -117,10 +117,10 @@ class Layout(unittest.TestCase):
         from iadetailer.args import InspectorArgs, RunArgs, UnitArgs
 
         uistate.save("txt2img", RunArgs(enable=True), [UnitArgs(repaint="Only flagged by Inspector")],
-                     InspectorArgs(enable=True, profile="Stylised", overlay=False))
+                     InspectorArgs(enable=True, profile="Stylised", score=False))
         data = uistate.load("txt2img")
         self.assertEqual(data["inspector"]["profile"], "Stylised")
-        self.assertFalse(data["inspector"]["overlay"])
+        self.assertFalse(data["inspector"]["score"])
         self.assertEqual(data["units"][0]["repaint"], "Only flagged by Inspector")
 
 

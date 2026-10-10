@@ -119,6 +119,20 @@ def _wants_run(run, units, inspector) -> bool:
     return inspector.enable or any(u.enabled and u.model not in ("", "None") for u in units)
 
 
+def _anatomy_score(p, inspector, report) -> None:
+    """The Inspector's score into this image's infotext.
+
+    postprocess_image runs once per image and the infotext of that image is
+    written right after it, so the shared extra_generation_params can carry a
+    per-image value as long as a stale one is removed first."""
+    extra = getattr(p, "extra_generation_params", None)
+    if not isinstance(extra, dict):
+        return
+    extra.pop(SCORE_KEY, None)
+    if inspector.enable and inspector.score and report is not None and report.ok:
+        extra[SCORE_KEY] = report.infotext()
+
+
 def _clean_infotext(p) -> str:
     """The generation parameters for the image currently in postprocess_image,
     minus this extension's own keys.
@@ -303,19 +317,12 @@ class Script(scripts.Script):
 
         original_sig = _signature(original)
         pp.image = detailed
-        report = getattr(p, "iad_anatomy_report", None)
-        overlay = self._anatomy_output(p, inspector, report, original)
+        _anatomy_score(p, inspector, getattr(p, "iad_anatomy_report", None))
 
         if original_sig == _signature(detailed):
             # Nothing was detected, or the loop changed nothing. A comparer of
             # an image against itself is just noise - and so is a -before copy
-            # that is byte-identical to the image saved next to it. The one
-            # exception: the Inspector's overlay is worth seeing on its own.
-            if overlay is not None:
-                try:
-                    CompareStore.save_pair(original=original, detailed=detailed, overlay=overlay)
-                except Exception as exc:
-                    print(f"[Impact ADetailer] compare save failed: {exc}")
+            # that is byte-identical to the image saved next to it.
             return
 
         if run.save_before:
@@ -328,34 +335,9 @@ class Script(scripts.Script):
             self._results = {}
         self._results[original_sig] = detailed
         try:
-            CompareStore.save_pair(original=original, detailed=detailed, overlay=overlay)
+            CompareStore.save_pair(original=original, detailed=detailed)
         except Exception as exc:
             print(f"[Impact ADetailer] compare save failed: {exc}")
-
-    @staticmethod
-    def _anatomy_output(p, inspector, report, original):
-        """Score into this image's infotext, overlay for the comparer.
-
-        postprocess_image runs once per image and the infotext of that image is
-        written right after it, so the shared extra_generation_params can carry
-        a per-image value as long as a stale one is removed first."""
-        extra = getattr(p, "extra_generation_params", None)
-        if isinstance(extra, dict):
-            extra.pop(SCORE_KEY, None)
-            if inspector.enable and inspector.score and report is not None and report.ok:
-                extra[SCORE_KEY] = report.infotext()
-        if not (inspector.enable and inspector.overlay and report is not None and report.ok):
-            return None
-        try:
-            from iadetailer.anatomy.render import draw_overlay
-            from iadetailer.settings import show_comparer
-
-            if not show_comparer():
-                return None
-            return draw_overlay(report, CompareStore.preview_size(original.size))
-        except Exception as exc:
-            print(f"[Impact ADetailer] inspector overlay failed: {exc}")
-            return None
 
     def postprocess(self, p, processed, *args):
         # Some ReForge/Forge builds drop the postprocess_image result for the
@@ -405,8 +387,7 @@ def _on_app_started(*args):
         return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
     def image(slot: int = -1, side: str = "original", r: int = 0):
-        low = str(side).lower()
-        side = "overlay" if low.startswith("ov") else ("detailed" if low.startswith("d") else "original")
+        side = "detailed" if str(side).lower().startswith("d") else "original"
         try:
             # A request left over from a previous generation must not be
             # answered with this generation's pixels.
@@ -419,7 +400,7 @@ def _on_app_started(*args):
             return Response(status_code=404)
         return Response(
             content=data,
-            media_type="image/png" if side == "overlay" else "image/jpeg",
+            media_type="image/jpeg",
             headers={"Cache-Control": "no-store"},
         )
 

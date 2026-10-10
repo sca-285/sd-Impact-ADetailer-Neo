@@ -108,7 +108,6 @@ def save(tab: str, run: RunArgs, units: list[UnitArgs], inspector: InspectorArgs
         "inspector": {
             "enable": bool(inspector.enable),
             "profile": str(inspector.profile),
-            "overlay": bool(inspector.overlay),
             "score": bool(inspector.score),
         } if inspector is not None else {},
         "units": [

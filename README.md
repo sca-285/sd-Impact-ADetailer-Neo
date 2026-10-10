@@ -108,8 +108,9 @@ The Inspector looks first:
    on the detection sheet ("not flagged") and left exactly as they were.
 3. **Guide**: with the ControlNet preprocessor **Hand depth (Inspector)**, a flagged
    hand is repainted against a clean five-finger depth map built from its landmarks.
-4. **Report**: skeleton, hand capsules and findings over the comparer (toggle
-   *Anatomy overlay* in the dock), a short score in the infotext
+4. **Report**: skeleton, hand capsules and findings on an "Anatomy Inspector"
+   sheet in the gallery (when **Process images** is not Off; the comparer stays
+   a plain before/after), a short score in the infotext
    (`Anatomy score: 87 (hand_shape x1)`), and one console line per image:
    `[Impact ADetailer] Inspector: score 74, 2 findings (hand_shape p0 left ≈6 fingers, head_ratio p1 ...)`.
 

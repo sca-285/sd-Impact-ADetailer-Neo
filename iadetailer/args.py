@@ -26,7 +26,6 @@ class InspectorArgs:
 
     enable: bool = False
     profile: str = "Realistic"
-    overlay: bool = True
     score: bool = True
 
 
